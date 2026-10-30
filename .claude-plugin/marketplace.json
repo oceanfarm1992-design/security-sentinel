@@ -1,0 +1,16 @@
+{
+  "name": "security-sentinel-marketplace",
+  "description": "Security Sentinel: continuous security intelligence for AI-built and hand-built apps.",
+  "owner": {
+    "name": "Security Sentinel contributors"
+  },
+  "plugins": [
+    {
+      "name": "security-sentinel",
+      "source": "./",
+      "description": "Continuous security intelligence, triage and safe self-improvement for your application.",
+      "category": "security",
+      "tags": ["security", "vulnerabilities", "owasp", "kev"]
+    }
+  ]
+}

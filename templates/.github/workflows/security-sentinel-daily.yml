@@ -1,0 +1,115 @@
+# Security Sentinel — daily check
+# Known-exploited (CISA KEV) matches, dependency vulnerabilities (osv-scanner)
+# and secret scanning (gitleaks). Read-only on code: it never commits, deploys or
+# merges. It uploads reports as an artifact and opens ONE issue when something
+# needs the owner's attention.
+#
+# This file is protected by the Security Sentinel guard hook: the agent cannot
+# edit or disable it.
+#
+# Supply-chain note: the scanner images below use version tags. After the first
+# successful run, consider pinning each to its digest (image@sha256:...).
+
+name: Security Sentinel (daily)
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # daily, 03:17 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  OSV_SCANNER_IMAGE: ghcr.io/google/osv-scanner:latest
+  GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:latest
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history so gitleaks can scan past commits
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare report folder
+        run: mkdir -p sentinel-out
+
+      - name: CISA KEV check (entries added in the last 3 days)
+        id: kev
+        run: |
+          set +e
+          python3 -I security/tools/kev_check.py --project . --days 3 \
+            --out sentinel-out/kev.md --json sentinel-out/kev.json --fail-on-match
+          code=$?
+          set -e
+          if [ "$code" = "3" ]; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
+          if [ "$code" = "1" ]; then echo "::warning::KEV catalog could not be downloaded"; fi
+
+      - name: Dependency scan (osv-scanner)
+        id: osv
+        run: |
+          set +e
+          docker run --rm -v "$PWD:/src" -w /src "$OSV_SCANNER_IMAGE" \
+            scan source -r /src --format markdown > sentinel-out/osv.md 2> sentinel-out/osv.err
+          code=$?
+          set -e
+          # osv-scanner exits 1 when vulnerabilities are found, 128 when no lockfiles exist
+          if [ "$code" = "1" ]; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
+          if [ "$code" -gt 1 ]; then echo "::warning::osv-scanner exit $code (no lockfiles or scanner error); see osv.err"; fi
+
+      - name: Secret scan (gitleaks, redacted)
+        id: leaks
+        run: |
+          set +e
+          docker run --rm -v "$PWD:/repo" "$GITLEAKS_IMAGE" \
+            detect --source /repo --redact --no-banner \
+            --report-format json --report-path /repo/sentinel-out/gitleaks.json
+          code=$?
+          set -e
+          if [ "$code" = "1" ]; then echo "found=true" >> "$GITHUB_OUTPUT"; else echo "found=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-sentinel-daily-${{ github.run_id }}
+          path: sentinel-out/
+          retention-days: 30
+
+      - name: Open an issue for the owner
+        if: steps.kev.outputs.found == 'true' || steps.osv.outputs.found == 'true' || steps.leaks.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEV: ${{ steps.kev.outputs.found }}
+          OSV: ${{ steps.osv.outputs.found }}
+          LEAKS: ${{ steps.leaks.outputs.found }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Security Sentinel: findings need review ($(date -u +%F))"
+          # Avoid duplicates: skip if an open Sentinel issue already exists for today.
+          if gh issue list --state open --search "\"$title\" in:title" --json number --jq 'length' | grep -qv '^0$'; then
+            echo "Issue already open for today"; exit 0
+          fi
+          {
+            echo "Automated daily check found items that need triage."
+            echo
+            [ "$KEV" = "true" ]   && echo "- **CRITICAL candidate:** a component matched the CISA Known Exploited Vulnerabilities catalog (see kev.md)."
+            [ "$LEAKS" = "true" ] && echo "- **Possible leaked secret** detected by gitleaks (values redacted; see gitleaks.json). Treat any real secret as compromised and rotate it."
+            [ "$OSV" = "true" ]   && echo "- **Vulnerable dependencies** reported by osv-scanner (see osv.md)."
+            echo
+            echo "Reports: download the artifact from $RUN_URL"
+            echo
+            echo "Next step: in Claude Code, ask the security-sentinel agent to triage these against the app and update security/VULNERABILITY_REGISTER.md."
+          } > body.md
+          gh label create security-sentinel --color B60205 --description "Security Sentinel findings" 2>/dev/null || true
+          gh issue create --title "$title" --body-file body.md --label security-sentinel

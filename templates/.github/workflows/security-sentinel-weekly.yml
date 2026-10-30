@@ -1,0 +1,54 @@
+# Security Sentinel — weekly scan
+# Static analysis (semgrep, OWASP + secrets rules) and filesystem/IaC scanning
+# (trivy). Read-only; uploads reports as an artifact. Never commits or deploys.
+#
+# This file is protected by the Security Sentinel guard hook.
+# Supply-chain note: consider pinning the images to digests after the first run.
+
+name: Security Sentinel (weekly)
+
+on:
+  schedule:
+    - cron: "41 4 * * 1"   # Mondays, 04:41 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  SEMGREP_IMAGE: semgrep/semgrep:latest
+  TRIVY_IMAGE: aquasec/trivy:latest
+
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare report folder
+        run: mkdir -p sentinel-out
+
+      - name: Static analysis (semgrep)
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGE" \
+            semgrep scan --metrics=off \
+              --config p/owasp-top-ten --config p/secrets --config p/javascript --config p/typescript \
+              --sarif --output /src/sentinel-out/semgrep.sarif || true
+
+      - name: Filesystem, dependency and IaC scan (trivy)
+        run: |
+          docker run --rm -v "$PWD:/src" "$TRIVY_IMAGE" \
+            fs --scanners vuln,misconfig,secret --severity HIGH,CRITICAL \
+            --format table --output /src/sentinel-out/trivy.txt /src || true
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-sentinel-weekly-${{ github.run_id }}
+          path: sentinel-out/
+          retention-days: 60

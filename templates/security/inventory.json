@@ -1,0 +1,9 @@
+{
+  "_comment": "Machine-readable inventory used by kev_check.py. List products and services the app depends on that do not appear in package.json/requirements.txt (runtime, database, hosting, auth, OS images). Names should match how vendors name them (e.g. vendor 'php', product 'php').",
+  "products": [
+    { "vendor": "nodejs", "product": "node.js", "version": "" },
+    { "vendor": "supabase", "product": "supabase", "version": "" },
+    { "vendor": "vercel", "product": "next.js", "version": "" }
+  ],
+  "keywords": []
+}

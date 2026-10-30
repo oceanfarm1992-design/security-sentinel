@@ -1,0 +1,11 @@
+{
+  "name": "security-sentinel",
+  "displayName": "Security Sentinel",
+  "version": "1.0.0",
+  "description": "Continuous security intelligence for your app: tracks CISA KEV, OSV and OWASP, triages new vulnerabilities against your own stack, keeps a security/ knowledge base, and proposes fixes on branches — never touching production or its own policy without your approval.",
+  "author": {
+    "name": "Security Sentinel contributors"
+  },
+  "license": "MIT",
+  "keywords": ["security", "vulnerability", "owasp", "cisa-kev", "osv", "supabase", "vibe-coding", "devsecops"]
+}
