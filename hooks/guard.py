@@ -23,9 +23,9 @@ import re
 import sys
 
 PROTECTED_PATTERNS = [
-    re.compile(r"(^|/)security/SECURITY_POLICY\.md$"),
-    re.compile(r"(^|/)\.github/workflows/security-sentinel-[\w.-]+\.ya?ml$"),
-    re.compile(r"(^|/)\.security-sentinel-lock$"),
+    re.compile(r"(^|/)security/SECURITY_POLICY\.md$", re.IGNORECASE),
+    re.compile(r"(^|/)\.github/workflows/security-sentinel-[\w.-]+\.ya?ml$", re.IGNORECASE),
+    re.compile(r"(^|/)\.security-sentinel-lock$", re.IGNORECASE),
 ]
 
 # Shell fragments that write/move/delete a path.
@@ -83,7 +83,11 @@ def check_bash(command: str) -> None:
     if not unlocked():
         for pat in PROTECTED_PATTERNS:
             # Look for a protected path mentioned alongside a write verb.
-            for m in re.finditer(r"[\w./\\-]*(SECURITY_POLICY\.md|security-sentinel-[\w.-]+\.ya?ml|\.security-sentinel-lock)", command):
+            for m in re.finditer(
+                r"[\w./\\-]*(SECURITY_POLICY\.md|security-sentinel-[\w.-]+\.ya?ml|\.security-sentinel-lock)",
+                command,
+                re.IGNORECASE,
+            ):
                 if re.search(WRITE_VERBS, command) and pat.search(m.group(0).replace("\\", "/")):
                     block(f"shell command would modify protected file '{m.group(0)}'.")
 
