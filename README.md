@@ -30,7 +30,7 @@ weakening your protections or touching production on its own.**
 In Claude Code, add this repository as a plugin marketplace and install:
 
 ```text
-/plugin marketplace add <your-github-username>/security-sentinel
+/plugin marketplace add oceanfarm1992-design/security-sentinel
 /plugin install security-sentinel@security-sentinel-marketplace
 ```
 
@@ -49,7 +49,7 @@ The knowledge base and workflows work on their own. Any AI coding tool can follo
 `security/SKILL.md`.
 
 ```bash
-git clone https://github.com/<your-github-username>/security-sentinel
+git clone https://github.com/oceanfarm1992-design/security-sentinel
 bash security-sentinel/scripts/install.sh --project /path/to/your-app
 ```
 
